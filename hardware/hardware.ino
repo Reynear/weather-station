@@ -22,8 +22,7 @@ struct DashboardData {
   float humidityPct;
   float pressureHpa;
   float soilMoisturePct;
-  float lightLux;
-  const char* networkStatus;
+  bool isOnline;
   unsigned long uptimeSeconds;
 };
 
@@ -32,8 +31,7 @@ struct DashboardCache {
   String humidity;
   String pressure;
   String soil;
-  String light;
-  String network;
+  bool isOnline;
   String clock;
 };
 
@@ -47,18 +45,25 @@ struct Rect {
 namespace Layout {
   constexpr int16_t kScreenW = 240;
   constexpr int16_t kScreenH = 320;
-  constexpr int16_t kHeaderH = 0;
-  constexpr int16_t kGridY = kHeaderH;
-  constexpr int16_t kCardH = (kScreenH - kHeaderH) / 3;
-  constexpr int16_t kCol0W = 120;
-  constexpr int16_t kCol1W = 120;
+  constexpr int16_t kHeaderH = 24;
+  constexpr int16_t kMargin = 6;
+  constexpr int16_t kGutter = 4;
+  
+  constexpr int16_t kCardW = (kScreenW - (kMargin * 2) - kGutter) / 2; 
+  constexpr int16_t kCardH = (kScreenH - kHeaderH - (kMargin * 2) - kGutter) / 2;
+  
+  constexpr int16_t kRow0Y = kHeaderH + kMargin; 
+  constexpr int16_t kRow1Y = kRow0Y + kCardH + kGutter; 
+  
+  constexpr int16_t kCol0X = kMargin; 
+  constexpr int16_t kCol1X = kCol0X + kCardW + kGutter;
 
-  constexpr Rect kTempCard = {0, kGridY, kCol0W, kCardH};
-  constexpr Rect kHumidityCard = {kCol0W, kGridY, kCol1W, kCardH};
-  constexpr Rect kPressureCard = {0, kGridY + kCardH, kCol0W, kCardH};
-  constexpr Rect kSoilCard = {kCol0W, kGridY + kCardH, kCol1W, kCardH};
-  constexpr Rect kLightCard = {0, kGridY + (kCardH * 2), kCol0W, kCardH};
-  constexpr Rect kSystemCard = {kCol0W, kGridY + (kCardH * 2), kCol1W, kCardH};
+  constexpr Rect kTempCard = {kCol0X, kRow0Y, kCardW, kCardH};
+  constexpr Rect kHumidityCard = {kCol1X, kRow0Y, kCardW, kCardH};
+  constexpr Rect kPressureCard = {kCol0X, kRow1Y, kCardW, kCardH};
+  constexpr Rect kSoilCard = {kCol1X, kRow1Y, kCardW, kCardH};
+  
+  constexpr Rect kHeaderTime = {kScreenW - 60, 0, 54, kHeaderH};
 }
 
 namespace Colors {
@@ -69,6 +74,7 @@ namespace Colors {
   uint16_t value;
   uint16_t accent;
   uint16_t good;
+  uint16_t error;
 }
 
 static unsigned long lastRefreshMs = 0;
@@ -82,13 +88,10 @@ DashboardData getDashboardData();
 String formatClock(unsigned long seconds);
 void drawCardLabel(const Rect& rect, const char* label);
 void drawValueCard(const Rect& rect, const String& valueText, const char* unitText);
-void drawSystemRows();
 Rect makeValueArea(const Rect& card);
 Rect makeUnitArea(const Rect& card);
-Rect makeSystemValueArea(uint8_t rowIndex);
 const GFXfont* selectValueFont(const Rect& rect, const String& valueText);
-void drawRightAlignedText(const Rect& area, const String& text, uint16_t color, const GFXfont* font);
-void drawFixedTextDiff(const Rect& area, const String& previous, const String& next, uint16_t color);
+void drawFixedTextDiff(const Rect& area, const String& previous, const String& next, uint16_t color, uint16_t bg);
 
 void setup() {
   Serial.begin(115200);
@@ -97,13 +100,15 @@ void setup() {
   tft.setRotation(0);
   tft.setTextWrap(false);
 
-  Colors::background = tft.color565(242, 244, 247);
-  Colors::surface = tft.color565(248, 249, 251);
-  Colors::line = tft.color565(214, 219, 226);
-  Colors::label = tft.color565(133, 143, 159);
-  Colors::value = tft.color565(18, 33, 68);
-  Colors::accent = tft.color565(54, 66, 88);
-  Colors::good = tft.color565(34, 88, 61);
+  // Dark Theme Palette
+  Colors::background = tft.color565(18, 18, 18);   // #121212 Charcoal
+  Colors::surface = tft.color565(37, 37, 37);      // #252525 Dark Slate
+  Colors::line = tft.color565(60, 60, 60);         // #3C3C3C Muted Line
+  Colors::label = tft.color565(160, 160, 160);     // #A0A0A0 Dim Silver
+  Colors::value = tft.color565(255, 255, 255);     // #FFFFFF Pure White
+  Colors::accent = tft.color565(100, 150, 255);    // #6496FF Soft Blue
+  Colors::good = tft.color565(0, 230, 118);        // #00E676 Mint Green
+  Colors::error = tft.color565(255, 82, 82);       // #FF5252 Soft Red
 
   drawDashboardShell();
   renderDashboardValues(getDashboardData());
@@ -121,18 +126,24 @@ void loop() {
 void drawDashboardShell() {
   tft.fillScreen(Colors::background);
 
-  tft.fillRect(0, 0, Layout::kScreenW, Layout::kScreenH, Colors::surface);
-  tft.drawFastHLine(0, Layout::kGridY + Layout::kCardH, Layout::kScreenW, Colors::line);
-  tft.drawFastHLine(0, Layout::kGridY + (Layout::kCardH * 2), Layout::kScreenW, Colors::line);
-  tft.drawFastVLine(Layout::kCol0W, Layout::kGridY, Layout::kScreenH, Colors::line);
+  // Draw Cards with rounded corners
+  const uint8_t r = 6;
+  tft.fillRoundRect(Layout::kTempCard.x, Layout::kTempCard.y, Layout::kTempCard.w, Layout::kTempCard.h, r, Colors::surface);
+  tft.fillRoundRect(Layout::kHumidityCard.x, Layout::kHumidityCard.y, Layout::kHumidityCard.w, Layout::kHumidityCard.h, r, Colors::surface);
+  tft.fillRoundRect(Layout::kPressureCard.x, Layout::kPressureCard.y, Layout::kPressureCard.w, Layout::kPressureCard.h, r, Colors::surface);
+  tft.fillRoundRect(Layout::kSoilCard.x, Layout::kSoilCard.y, Layout::kSoilCard.w, Layout::kSoilCard.h, r, Colors::surface);
 
-  drawCardLabel(Layout::kTempCard, "TEMPERATURE");
+  drawCardLabel(Layout::kTempCard, "TEMP");
   drawCardLabel(Layout::kHumidityCard, "HUMIDITY");
   drawCardLabel(Layout::kPressureCard, "PRESSURE");
   drawCardLabel(Layout::kSoilCard, "SOIL");
-  drawCardLabel(Layout::kLightCard, "LIGHT");
-  drawCardLabel(Layout::kSystemCard, "SYSTEM");
-  drawSystemRows();
+
+  // Header Network Label
+  tft.setFont(nullptr);
+  tft.setTextColor(Colors::label);
+  tft.setTextSize(1);
+  tft.setCursor(Layout::kMargin + 12, 8);
+  tft.print("WIFI");
 }
 
 void renderDashboardValues(const DashboardData& data) {
@@ -141,10 +152,20 @@ void renderDashboardValues(const DashboardData& data) {
   nextFrame.humidity = String(data.humidityPct, 1);
   nextFrame.pressure = String(data.pressureHpa, 1);
   nextFrame.soil = String(data.soilMoisturePct, 1);
-  nextFrame.light = String(data.lightLux, 1);
-  nextFrame.network = String(data.networkStatus);
+  nextFrame.isOnline = data.isOnline;
   nextFrame.clock = formatClock(data.uptimeSeconds);
 
+  // Network Status Dot
+  if (!hasPreviousFrame || nextFrame.isOnline != previousFrame.isOnline) {
+    tft.fillCircle(Layout::kMargin + 4, 11, 3, nextFrame.isOnline ? Colors::good : Colors::error);
+  }
+
+  // Header Clock
+  if (!hasPreviousFrame || nextFrame.clock != previousFrame.clock) {
+    drawFixedTextDiff(Layout::kHeaderTime, hasPreviousFrame ? previousFrame.clock : "", nextFrame.clock, Colors::value, Colors::background);
+  }
+
+  // Sensor Cards
   if (!hasPreviousFrame || nextFrame.temperature != previousFrame.temperature) {
     drawValueCard(Layout::kTempCard, nextFrame.temperature, "C");
   }
@@ -157,12 +178,6 @@ void renderDashboardValues(const DashboardData& data) {
   if (!hasPreviousFrame || nextFrame.soil != previousFrame.soil) {
     drawValueCard(Layout::kSoilCard, nextFrame.soil, "%");
   }
-  if (!hasPreviousFrame || nextFrame.light != previousFrame.light) {
-    drawValueCard(Layout::kLightCard, nextFrame.light, "lux");
-  }
-
-  drawFixedTextDiff(makeSystemValueArea(0), hasPreviousFrame ? previousFrame.network : "", nextFrame.network, Colors::value);
-  drawFixedTextDiff(makeSystemValueArea(1), hasPreviousFrame ? previousFrame.clock : "", nextFrame.clock, Colors::value);
 
   previousFrame = nextFrame;
   hasPreviousFrame = true;
@@ -178,8 +193,7 @@ DashboardData getDashboardData() {
   data.humidityPct = 52.4f + (slowWave * 0.5f);
   data.pressureHpa = 1013.5f + (wave * 0.8f);
   data.soilMoisturePct = 62.0f + (slowWave * 0.7f);
-  data.lightLux = 648.4f + (wave * 6.0f);
-  data.networkStatus = (WiFi.status() == WL_CONNECTED) ? "ONLINE" : "OFFLINE";
+  data.isOnline = (WiFi.status() == WL_CONNECTED);
   data.uptimeSeconds = uptimeSeconds;
   return data;
 }
@@ -230,49 +244,21 @@ void drawValueCard(const Rect& rect, const String& valueText, const char* unitTe
   tft.print(unitText);
 }
 
-void drawSystemRows() {
-  tft.setFont(nullptr);
-  tft.setTextColor(Colors::label);
-  tft.setTextSize(1);
-
-  const int16_t left = Layout::kSystemCard.x + 8;
-  const int16_t networkRowY = Layout::kSystemCard.y + 24;
-  const int16_t timeRowY = Layout::kSystemCard.y + 56;
-
-  tft.setCursor(left, networkRowY);
-  tft.print("NETWORK");
-  tft.drawFastHLine(Layout::kSystemCard.x + 8, networkRowY + 9, Layout::kSystemCard.w - 16, Colors::line);
-
-  tft.setCursor(left, timeRowY);
-  tft.print("TIME");
-  tft.drawFastHLine(Layout::kSystemCard.x + 8, timeRowY + 9, Layout::kSystemCard.w - 16, Colors::line);
-}
-
 Rect makeValueArea(const Rect& card) {
   return {
-    static_cast<int16_t>(card.x + 6),
-    static_cast<int16_t>(card.y + 24),
-    static_cast<int16_t>(card.w - 12),
-    static_cast<int16_t>(card.h - 44)
+    static_cast<int16_t>(card.x + 4),
+    static_cast<int16_t>(card.y + 20),
+    static_cast<int16_t>(card.w - 8),
+    static_cast<int16_t>(card.h - 36)
   };
 }
 
 Rect makeUnitArea(const Rect& card) {
   return {
-    static_cast<int16_t>(card.x + 6),
-    static_cast<int16_t>(card.y + card.h - 14),
-    static_cast<int16_t>(card.w - 12),
+    static_cast<int16_t>(card.x + 4),
+    static_cast<int16_t>(card.y + card.h - 12),
+    static_cast<int16_t>(card.w - 8),
     10
-  };
-}
-
-Rect makeSystemValueArea(uint8_t rowIndex) {
-  const int16_t baseY = Layout::kSystemCard.y + ((rowIndex == 0) ? 40 : 72);
-  return {
-    static_cast<int16_t>(Layout::kSystemCard.x + 8),
-    baseY,
-    static_cast<int16_t>(Layout::kSystemCard.w - 16),
-    12
   };
 }
 
@@ -284,37 +270,20 @@ const GFXfont* selectValueFont(const Rect& rect, const String& valueText) {
 
   tft.setFont(&FreeSansBold18pt7b);
   tft.getTextBounds(valueText, 0, 0, &x1, &y1, &textW, &textH);
-  if (textW <= static_cast<uint16_t>(rect.w - 18)) {
+  if (textW <= static_cast<uint16_t>(rect.w - 12)) {
     return &FreeSansBold18pt7b;
   }
 
   tft.setFont(&FreeSansBold12pt7b);
   tft.getTextBounds(valueText, 0, 0, &x1, &y1, &textW, &textH);
-  if (textW <= static_cast<uint16_t>(rect.w - 16)) {
+  if (textW <= static_cast<uint16_t>(rect.w - 8)) {
     return &FreeSansBold12pt7b;
   }
 
   return &FreeSansBold9pt7b;
 }
 
-void drawRightAlignedText(const Rect& area, const String& text, uint16_t color, const GFXfont* font) {
-  tft.fillRect(area.x, area.y, area.w, area.h, Colors::surface);
-  tft.setFont(font);
-  tft.setTextColor(color);
-  tft.setTextSize(1);
-
-  int16_t x1;
-  int16_t y1;
-  uint16_t textW;
-  uint16_t textH;
-  tft.getTextBounds(text, 0, 0, &x1, &y1, &textW, &textH);
-  const int16_t cursorX = area.x + area.w - static_cast<int16_t>(textW) - x1;
-  const int16_t cursorY = area.y + area.h - 1;
-  tft.setCursor(cursorX, cursorY);
-  tft.print(text);
-}
-
-void drawFixedTextDiff(const Rect& area, const String& previous, const String& next, uint16_t color) {
+void drawFixedTextDiff(const Rect& area, const String& previous, const String& next, uint16_t color, uint16_t bg) {
   const uint8_t charW = 6;
   const uint8_t charH = 8;
   const size_t maxChars = area.w / charW;
@@ -334,6 +303,6 @@ void drawFixedTextDiff(const Rect& area, const String& previous, const String& n
 
     const int16_t cellX = area.x + static_cast<int16_t>(i * charW);
     const int16_t cellY = area.y + ((area.h - charH) / 2);
-    tft.drawChar(cellX, cellY, nextCh, color, Colors::surface, 1);
+    tft.drawChar(cellX, cellY, nextCh, color, bg, 1);
   }
 }
