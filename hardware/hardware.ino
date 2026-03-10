@@ -8,12 +8,12 @@
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSansBold9pt7b.h>
 
-#define TFT_DC    17
-#define TFT_CS    5
-#define TFT_RST   16
-#define TFT_CLK   18
-#define TFT_MOSI  23
-#define TFT_MISO  19
+#define TFT_DC    18
+#define TFT_CS    23
+#define TFT_RST   19
+#define TFT_CLK   17
+#define TFT_MOSI  5
+#define TFT_MISO  16
 
 Adafruit_ILI9341 tft(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK, TFT_RST, TFT_MISO);
 
@@ -217,31 +217,42 @@ void drawCardLabel(const Rect& rect, const char* label) {
 
 void drawValueCard(const Rect& rect, const String& valueText, const char* unitText) {
   const Rect valueArea = makeValueArea(rect);
-  const Rect unitArea = makeUnitArea(rect);
-  tft.fillRect(valueArea.x, valueArea.y, valueArea.w, valueArea.h, Colors::surface);
-  tft.fillRect(unitArea.x, unitArea.y, unitArea.w, unitArea.h, Colors::surface);
+  
+  // Create an off-screen 16-bit canvas sized to the inner value area
+  // This requires about (W * H * 2) bytes of RAM (e.g. 106 * 98 * 2 = ~20KB)
+  GFXcanvas16 canvas(valueArea.w, valueArea.h);
+  
+  // Fill canvas with the surface color (erasing previous content in memory)
+  canvas.fillScreen(Colors::surface);
 
+  // Measure and draw main value text
   const GFXfont* valueFont = selectValueFont(rect, valueText);
-  tft.setFont(valueFont);
-  tft.setTextColor(Colors::value);
-  tft.setTextSize(1);
+  canvas.setFont(valueFont);
+  canvas.setTextColor(Colors::value);
+  canvas.setTextSize(1);
 
   int16_t x1;
   int16_t y1;
   uint16_t valueW;
   uint16_t valueH;
-  tft.getTextBounds(valueText, 0, 0, &x1, &y1, &valueW, &valueH);
+  canvas.getTextBounds(valueText, 0, 0, &x1, &y1, &valueW, &valueH);
 
-  const int16_t baseX = valueArea.x + ((valueArea.w - static_cast<int16_t>(valueW)) / 2) - x1;
-  const int16_t baselineY = valueArea.y + ((valueArea.h - static_cast<int16_t>(valueH)) / 2) - y1;
-  tft.setCursor(baseX, baselineY);
-  tft.print(valueText);
+  // Coordinates are now relative to the canvas (0,0 is top-left of canvas)
+  const int16_t baseX = ((valueArea.w - static_cast<int16_t>(valueW)) / 2) - x1;
+  const int16_t baselineY = ((valueArea.h - static_cast<int16_t>(valueH)) / 2) - y1 - 4; // Shifted up slightly to make room for unit
+  canvas.setCursor(baseX, baselineY);
+  canvas.print(valueText);
 
-  tft.setFont(nullptr);
-  tft.setTextColor(Colors::label);
-  tft.setTextSize(1);
-  tft.setCursor(unitArea.x + unitArea.w - (static_cast<int16_t>(strlen(unitText)) * 6), unitArea.y + 1);
-  tft.print(unitText);
+  // Draw the unit text at the bottom right of the canvas
+  canvas.setFont(nullptr);
+  canvas.setTextColor(Colors::label);
+  canvas.setTextSize(1);
+  const int16_t unitLen = static_cast<int16_t>(strlen(unitText));
+  canvas.setCursor(valueArea.w - (unitLen * 6) - 4, valueArea.h - 10);
+  canvas.print(unitText);
+
+  // Push the completed frame buffer to the physical screen in one swift transaction
+  tft.drawRGBBitmap(valueArea.x, valueArea.y, canvas.getBuffer(), canvas.width(), canvas.height());
 }
 
 Rect makeValueArea(const Rect& card) {
@@ -249,37 +260,22 @@ Rect makeValueArea(const Rect& card) {
     static_cast<int16_t>(card.x + 4),
     static_cast<int16_t>(card.y + 20),
     static_cast<int16_t>(card.w - 8),
-    static_cast<int16_t>(card.h - 36)
-  };
-}
-
-Rect makeUnitArea(const Rect& card) {
-  return {
-    static_cast<int16_t>(card.x + 4),
-    static_cast<int16_t>(card.y + card.h - 12),
-    static_cast<int16_t>(card.w - 8),
-    10
+    static_cast<int16_t>(card.h - 24) // Extended down to cover the old unitArea space
   };
 }
 
 const GFXfont* selectValueFont(const Rect& rect, const String& valueText) {
-  int16_t x1;
-  int16_t y1;
-  uint16_t textW;
-  uint16_t textH;
+  // Avoid dynamic pixel width checking. Proportional fonts (like '1' vs '4') 
+  // cause the physical width to fluctuate, making the font randomly shrink.
+  // Using string length provides a perfectly stable font size.
+  const size_t len = valueText.length();
 
-  tft.setFont(&FreeSansBold18pt7b);
-  tft.getTextBounds(valueText, 0, 0, &x1, &y1, &textW, &textH);
-  if (textW <= static_cast<uint16_t>(rect.w - 12)) {
+  if (len <= 5) {
     return &FreeSansBold18pt7b;
   }
-
-  tft.setFont(&FreeSansBold12pt7b);
-  tft.getTextBounds(valueText, 0, 0, &x1, &y1, &textW, &textH);
-  if (textW <= static_cast<uint16_t>(rect.w - 8)) {
+  if (len <= 7) {
     return &FreeSansBold12pt7b;
   }
-
   return &FreeSansBold9pt7b;
 }
 
