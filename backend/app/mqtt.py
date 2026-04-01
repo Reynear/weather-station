@@ -1,6 +1,6 @@
 import json
+from datetime import datetime, timezone
 
-from flask import Flask
 from paho.mqtt import client as mqtt
 
 
@@ -63,7 +63,13 @@ class MQTT:
         raw_payload = message.payload.decode("utf-8", errors="replace")
         try:
             payload = json.loads(raw_payload)
-            document = payload
+            if not isinstance(payload, dict):
+                raise ValueError("MQTT payload must decode to a JSON object.")
+
+            document = {
+                **payload,
+                "recorded_at": datetime.now(timezone.utc),
+            }
             result = self.db.get_collection().insert_one(document)
             print(f"Inserted weather reading {result.inserted_id}")
         except Exception as exc:

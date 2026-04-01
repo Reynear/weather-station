@@ -1,7 +1,6 @@
 from urllib.parse import quote_plus
 
-from flask import Flask
-from pymongo import MongoClient
+from pymongo import ASCENDING, MongoClient
 
 
 class DB:
@@ -20,8 +19,16 @@ class DB:
         self.client = MongoClient(uri)
         self.database = self.client[app.config["MONGO_DATABASE"]]
         self.collection = self.database[app.config["MONGO_COLLECTION"]]
+        self.ensure_recorded_at_index()
 
     def get_collection(self):
         if self.collection is None:
             raise RuntimeError("MongoDB collection is not initialized.")
         return self.collection
+
+    def ensure_recorded_at_index(self):
+        collection = self.get_collection()
+        return collection.create_index(
+            [("recorded_at", ASCENDING)],
+            name="recorded_at_1",
+        )

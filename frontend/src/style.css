@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+.apexcharts-xaxistooltip,
+.apexcharts-yaxistooltip,
+.apexcharts-xcrosshairs-tooltip,
+.apexcharts-ycrosshairs-tooltip {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
