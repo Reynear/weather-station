@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="flex flex-col gap-6">
     <UCard>
       <template #header>
         <div>
@@ -9,7 +9,7 @@
       </template>
 
       <div class="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
-        <div class="space-y-2">
+        <div class="flex flex-col gap-2">
           <label class="text-sm font-medium">Start Date</label>
           <UPopover :content="{ align: 'start' }">
             <UButton
@@ -31,7 +31,7 @@
           </UPopover>
         </div>
 
-        <div class="space-y-2">
+        <div class="flex flex-col gap-2">
           <label class="text-sm font-medium">End Date</label>
           <UPopover :content="{ align: 'start' }">
             <UButton
@@ -94,9 +94,9 @@
         class="w-full"
       >
         <template #content>
-          <div class="space-y-6">
+          <div class="flex flex-col gap-6">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div class="space-y-2">
+              <div class="flex flex-col gap-2">
                 <div class="flex items-center gap-3">
                   <h4 class="text-base font-semibold">{{ activeMetric.label }}</h4>
                   <UBadge color="neutral" variant="subtle">
@@ -135,7 +135,7 @@
                   <span class="text-sm font-medium text-slate-400">{{ stat.label }}</span>
                 </template>
 
-                <div class="space-y-2">
+                <div class="flex flex-col gap-2">
                   <div class="text-2xl font-semibold">{{ stat.value }}</div>
                   <p class="text-sm text-slate-400">{{ stat.meta }}</p>
                 </div>

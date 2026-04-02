@@ -1,15 +1,15 @@
 <template>
-  <div class="space-y-6">
+  <div class="flex flex-col gap-6">
     <UCard v-for="chart in charts" :key="chart.title">
       <template #header>
-        <div class="space-y-4">
+        <div class="flex flex-col gap-4">
           <div>
             <h3 class="text-lg font-semibold">{{ chart.title }}</h3>
             <p>{{ chart.description }}</p>
           </div>
 
           <div class="flex flex-wrap gap-4" v-if="chart.toggleGroups.length">
-            <div v-for="toggle in chart.toggleGroups" :key="toggle.metric" class="space-y-2">
+            <div v-for="toggle in chart.toggleGroups" :key="toggle.metric" class="flex flex-col gap-2">
               <div class="text-sm text-slate-400">{{ toggle.label }}</div>
               <div class="inline-flex rounded-xl border border-slate-800 bg-slate-950/60 p-1">
                 <UButton

@@ -1,8 +1,8 @@
 <template>
-  <div class="space-y-6">
+  <div class="flex flex-col gap-6">
     <UCard>
       <template #header>
-        <div class="space-y-2">
+        <div class="flex flex-col gap-2">
           <div class="flex items-center gap-3">
             <h2 class="text-2xl font-semibold">Live Readings</h2>
             <UBadge :color="statusBadge.color">
@@ -12,39 +12,40 @@
         </div>
       </template>
 
-      <UAlert
-        v-if="statusAlert"
-        :color="statusAlert.color"
-        :title="statusAlert.title"
-        :description="statusAlert.description"
-      />
+      <div class="flex flex-col gap-6">
+        <UAlert
+          v-if="statusAlert"
+          :color="statusAlert.color"
+          :title="statusAlert.title"
+          :description="statusAlert.description"
+        />
 
-      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <UCard v-for="item in liveMetrics" :key="item.key">
-          <template #header>
-            <div class="space-y-3">
-              <div class="flex items-center justify-between gap-3">
-                <span>{{ item.label }}</span>
-                <span class="text-sm text-slate-400">{{ item.unit.label }}</span>
-              </div>
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <UCard v-for="item in liveMetrics" :key="item.key">
+            <template #header>
+              <div class="flex items-center justify-between gap-3 min-h-[40px]">
+                <div class="flex items-center gap-3">
+                  <span>{{ item.label }}</span>
+                  <span class="text-sm text-slate-400">{{ item.unit.label }}</span>
+                </div>
 
-              <div
-                v-if="item.unitOptions.length > 1"
-                class="inline-flex rounded-xl border border-slate-800 bg-slate-950/60 p-1"
-              >
-                <UButton
-                  v-for="option in item.unitOptions"
-                  :key="option.value"
-                  :color="item.unitKey === option.value ? 'primary' : 'neutral'"
-                  :variant="item.unitKey === option.value ? 'solid' : 'ghost'"
-                  size="sm"
-                  @click="setUnit(item.key, option.value)"
+                <div
+                  v-if="item.unitOptions.length > 1"
+                  class="inline-flex rounded-xl border border-slate-800 bg-slate-950/60 p-1"
                 >
-                  {{ option.toggleLabel }}
-                </UButton>
+                  <UButton
+                    v-for="option in item.unitOptions"
+                    :key="option.value"
+                    :color="item.unitKey === option.value ? 'primary' : 'neutral'"
+                    :variant="item.unitKey === option.value ? 'solid' : 'ghost'"
+                    size="sm"
+                    @click="setUnit(item.key, option.value)"
+                  >
+                    {{ option.toggleLabel }}
+                  </UButton>
+                </div>
               </div>
-            </div>
-          </template>
+            </template>
 
           <div class="flex items-end justify-between gap-4">
             <div class="text-3xl font-semibold">{{ item.value }}</div>
@@ -62,6 +63,7 @@
             </div>
           </div>
         </UCard>
+      </div>
       </div>
     </UCard>
   </div>
